@@ -9,6 +9,17 @@ This prompt covers ONLY the foundation and authentication/authorization.
 Products, categories, audit logging, and the MCP server will come in later prompts.
 Do not implement anything outside the scope of the current phase.
 
+# Reference Document
+
+The attached `backend-task.md` is the full assessment description, given to you
+for context only. Rules:
+- This prompt is the source of truth. Where this prompt is more specific or makes
+  a different design decision than the task document, follow this prompt.
+- Do NOT implement anything from the task document that is outside the current
+  phase, even if it seems related.
+- If you notice that something in the current phase conflicts with a requirement
+  in the task document, tell me in your report instead of silently changing it.
+  
 # How We Work (strict rules)
 
 1. The work is split into phases (0 to 4). Implement ONE phase at a time.
