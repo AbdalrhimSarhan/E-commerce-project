@@ -1,98 +1,131 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Product Management API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+REST API for products and categories with role-based access, an audit log, and
+an MCP server that lets AI agents work through the same API.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Built with NestJS 12, TypeScript (strict), PostgreSQL 16, TypeORM 0.3 and Docker.
 
-## Description
+> Status: **Phase 0 (foundation)**: config, database wiring, health check,
+> unified responses, Swagger, Docker. Auth, products/categories, audit log and
+> MCP follow in later phases.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Run with Docker
 
-## Project setup
+Requirements: Docker with Compose v2.
 
 ```bash
-$ npm install
+cp .env.example .env
+docker compose up -d --build
+curl http://localhost:3000/api/health
 ```
 
-## Compile and run the project
+- API: http://localhost:3000/api
+- Swagger UI: http://localhost:3000/api/docs (OpenAPI JSON at `/api/docs-json`)
+
+The `api` container waits until Postgres is healthy, runs pending migrations,
+then starts. `docker compose ps` shows both services as `healthy`.
+
+Stop with `docker compose down` (add `-v` to also delete the database volume).
+
+## Run locally (without Docker for the API)
+
+Requirements: Node.js 24+.
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+cp .env.example .env          # DB_HOST=localhost
+docker compose up -d db       # only the database
+npm ci
+npm run migration:run
+npm run start:dev
 ```
 
-## Run tests
+## Environment variables
+
+All variables are validated at startup. If one is missing or invalid, the app
+(and the migration CLI) exits and lists every problem.
+
+| Variable       | Required | Default | Description |
+| -------------- | -------- | ------- | ----------- |
+| `NODE_ENV`     | yes      | none    | `development`, `production` or `test` |
+| `PORT`         | no       | `3000`  | HTTP port |
+| `CORS_ORIGINS` | no       | empty   | Comma-separated allowed origins (full `http(s)://` URLs). Empty disables CORS |
+| `TRUST_PROXY`  | no       | `false` | Express `trust proxy`: `true`, `false`, a hop count, or comma-separated IPs/subnets/`loopback`/`linklocal`/`uniquelocal`. Needed for a correct `req.ip` behind Docker or a proxy |
+| `DB_HOST`      | yes      | none    | Postgres host (`localhost` locally; Compose overrides it to `db` in the container) |
+| `DB_PORT`      | no       | `5432`  | Postgres port. `.env.example` uses `5433`: Compose publishes the container's Postgres on that host port, so it doesn't clash with a locally installed Postgres. Inside the `api` container Compose forces `5432` |
+| `DB_USERNAME`  | yes      | none    | Postgres user (also used by Compose to create the database) |
+| `DB_PASSWORD`  | yes      | none    | Postgres password |
+| `DB_NAME`      | yes      | none    | Database name |
+| `DB_LOGGING`   | no       | `false` | Log every SQL query (`true` / `false`) |
+
+`.env` is git-ignored. Never commit it.
+
+## Database migrations
+
+The schema is changed **only** through migrations (`synchronize` is always
+`false`). The CLI uses the same DataSource options as the app
+(`src/database/typeorm.config.ts`); scripts build first and run against `dist/`.
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run migration:generate -- src/database/migrations/<Name>   # diff entities vs DB
+npm run migration:create -- src/database/migrations/<Name>     # empty migration
+npm run migration:run
+npm run migration:revert
+npm run migration:show
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Tests and quality
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm test          # unit tests
+npm run lint
+npm run build
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## API conventions
 
-## Resources
+All routes are under `/api`. Every response uses one envelope:
 
-Check out a few resources that may come in handy when working with NestJS:
+```jsonc
+// success
+{ "success": true, "data": { }, "meta": { "requestId": "…", "timestamp": "…" } }
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+// error
+{
+  "success": false,
+  "error": { "code": "VALIDATION_ERROR", "message": "Validation failed",
+             "details": [{ "field": "email", "message": "email must be an email" }] },
+  "meta": { "requestId": "…", "timestamp": "…", "path": "/api/…" }
+}
+```
 
-## Support
+Paginated lists add `page`, `limit`, `total`, `totalPages` to `meta`.
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+| Code                  | HTTP | When |
+| --------------------- | ---- | ---- |
+| `VALIDATION_ERROR`    | 400  | Invalid input, malformed JSON, DB check constraint |
+| `BAD_REQUEST`         | other 4xx | e.g. 405, 413, 415 |
+| `UNAUTHORIZED`        | 401  | Missing or invalid credentials |
+| `FORBIDDEN`           | 403  | Authenticated but not allowed |
+| `NOT_FOUND`           | 404  | Unknown route or resource |
+| `CONFLICT`            | 409  | Unique or foreign-key conflict |
+| `TOO_MANY_REQUESTS`   | 429  | Rate limit hit |
+| `INTERNAL_ERROR`      | 500  | Unexpected error (details are only logged) |
+| `SERVICE_UNAVAILABLE` | 503  | Health check: a dependency is down |
 
-## Stay in touch
+**Request id:** send `X-Request-Id` (`^[A-Za-z0-9-]{1,64}$`) to correlate
+requests; otherwise a UUID is generated. It comes back in the `X-Request-Id`
+header, in `meta.requestId`, and in every server log line (`[rid:…]`).
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## Project structure
 
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+```
+src/
+  main.ts                 bootstrap (logger, shutdown hooks, listen)
+  app.setup.ts            HTTP setup shared with e2e tests (prefix, pipes, helmet, CORS, Swagger)
+  app.module.ts
+  config/                 env validation
+  database/               TypeORM options, CLI data source, migrations
+  common/                 cross-cutting: request id, logger, envelope, errors, Swagger helpers
+  modules/<feature>/      feature modules (health, then auth, products, categories, audit, mcp)
+docker/entrypoint.sh      migrations, then app start
+```
