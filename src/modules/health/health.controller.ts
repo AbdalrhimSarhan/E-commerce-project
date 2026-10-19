@@ -9,11 +9,13 @@ import {
   ApiErrorEnvelopes,
   ApiOkEnvelope,
 } from '../../common/swagger/api-envelope.decorators';
+import { Public } from '../auth/decorators/auth.decorators';
 import { HealthResultDto } from './dto/health-result.dto';
 
 const DB_PING_TIMEOUT_MS = 1500;
 
 @ApiTags('health')
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(

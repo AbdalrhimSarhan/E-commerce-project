@@ -1,0 +1,189 @@
+### Authentication: register, login, me, refresh, logout
+# Run "login" first; the other requests reuse its tokens automatically.
+
+@baseUrl = http://localhost:3000/api
+@agentKey = pmk_00000000_DEV-ONLY_local-agent-key_CHANGE-ME-outside0
+
+# ---------------------------------------------------------------------------
+# Login
+# ---------------------------------------------------------------------------
+
+### Login as admin: 200 { accessToken, refreshToken, accessTokenExpiresIn, user }
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Admin12345"
+}
+
+### Who am I (JWT): 200, authMethod "jwt"
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+
+### Who am I (agent API key): 200, actorType "agent", authMethod "api_key"
+GET {{baseUrl}}/auth/me
+X-API-Key: {{agentKey}}
+
+# ---------------------------------------------------------------------------
+# Refresh (rotation + reuse detection)
+# ---------------------------------------------------------------------------
+
+### Refresh: 200, a NEW token pair (the old refresh token is now used up)
+# @name refreshed
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{login.response.body.$.data.refreshToken}}"
+}
+
+### Reuse the OLD refresh token: 401, and the whole session is revoked
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{login.response.body.$.data.refreshToken}}"
+}
+
+### ...so even the new access token stops working now: 401
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{refreshed.response.body.$.data.accessToken}}
+
+# ---------------------------------------------------------------------------
+# Logout (log in again first: run "login2")
+# ---------------------------------------------------------------------------
+
+### Login again
+# @name login2
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Admin12345"
+}
+
+### Logout current session: 200 { revokedSessions: 1 }
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{login2.response.body.$.data.accessToken}}
+
+### Same token after logout: 401
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{login2.response.body.$.data.accessToken}}
+
+### Login once more, then logout from ALL devices
+# @name login3
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Admin12345"
+}
+
+### Logout all: 200 { revokedSessions: n }
+POST {{baseUrl}}/auth/logout-all
+Authorization: Bearer {{login3.response.body.$.data.accessToken}}
+
+# ---------------------------------------------------------------------------
+# Register
+# ---------------------------------------------------------------------------
+
+### Register: 201, role is always "user" (random email so it can be re-run)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "user{{$timestamp}}@example.com",
+  "name": "New User",
+  "password": "Secret123"
+}
+
+### Register with a duplicate email: 409 CONFLICT
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "name": "Dup",
+  "password": "Secret123"
+}
+
+### Register with a "role" field: 400 (property role should not exist)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "hacker{{$timestamp}}@example.com",
+  "name": "Hacker",
+  "password": "Secret123",
+  "role": "admin"
+}
+
+### Register with a weak password: 400
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "weak{{$timestamp}}@example.com",
+  "name": "Weak",
+  "password": "abc"
+}
+
+# ---------------------------------------------------------------------------
+# Failure cases (all give the same generic 401)
+# ---------------------------------------------------------------------------
+
+### Wrong password: 401 "Invalid credentials"
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Wrong12345"
+}
+
+### Unknown email: 401 "Invalid credentials"
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "nobody@example.com",
+  "password": "Whatever123"
+}
+
+### Agent account cannot log in with a password: 401
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "agent@example.com",
+  "password": "Whatever123"
+}
+
+### No credentials on a protected route: 401 "Authentication required"
+GET {{baseUrl}}/auth/me
+
+### Garbage token: 401
+GET {{baseUrl}}/auth/me
+Authorization: Bearer not.a.token
+
+### Garbage API key: 401
+GET {{baseUrl}}/auth/me
+X-API-Key: pmk_garbage
+
+### Both a bearer token and an API key: 401 (ambiguous)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+X-API-Key: {{agentKey}}
+
+### Rate limit: send this 11+ times within a minute -> 429 TOO_MANY_REQUESTS
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "nobody@example.com",
+  "password": "Whatever123"
+}

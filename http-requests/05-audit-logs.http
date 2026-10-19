@@ -1,0 +1,48 @@
+### Audit log: super_admin and admin (read only; the table is append-only)
+# Run some requests from the other files first, then look here.
+
+@baseUrl = http://localhost:3000/api
+@agentKey = pmk_00000000_DEV-ONLY_local-agent-key_CHANGE-ME-outside0
+
+### Login as admin
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Admin12345"
+}
+
+### Newest first
+GET {{baseUrl}}/audit-logs?page=1&limit=20
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+
+### Only denied attempts (403s)
+GET {{baseUrl}}/audit-logs?outcome=denied
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+
+### Only one kind of action (e.g. category.create, product.update, user.deactivate)
+GET {{baseUrl}}/audit-logs?action=category.create
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+
+### Everything that happened to categories
+GET {{baseUrl}}/audit-logs?resourceType=category
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+
+### Who am I as the agent (copy "id" to filter by actorId below)
+# @name agentMe
+GET {{baseUrl}}/auth/me
+X-API-Key: {{agentKey}}
+
+### Everything the agent did
+GET {{baseUrl}}/audit-logs?actorId={{agentMe.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+
+### A time window (ISO 8601)
+GET {{baseUrl}}/audit-logs?from=2026-01-01T00:00:00Z&to=2030-01-01T00:00:00Z&limit=5
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+
+### The agent cannot read the audit log: 403 (and that denial is itself audited)
+GET {{baseUrl}}/audit-logs
+X-API-Key: {{agentKey}}

@@ -1,0 +1,168 @@
+### Products: everyone reads; only super_admin and admin write
+# Run top to bottom: login -> create category -> create product -> ...
+
+@baseUrl = http://localhost:3000/api
+@agentKey = pmk_00000000_DEV-ONLY_local-agent-key_CHANGE-ME-outside0
+
+### Login as admin
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Admin12345"
+}
+
+### Login as normal user (read only)
+# @name userLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "User12345"
+}
+
+### Create a category to put the product into
+# @name category
+POST {{baseUrl}}/categories
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Keyboards {{$timestamp}}",
+  "description": "Mechanical and membrane keyboards"
+}
+
+# ---------------------------------------------------------------------------
+# Create / read
+# ---------------------------------------------------------------------------
+
+### Create product: 201 (sku is uppercased, price becomes "129.90")
+# @name product
+POST {{baseUrl}}/products
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+  "sku": "kb-{{$timestamp}}",
+  "name": "Mechanical keyboard",
+  "description": "Hot-swappable switches, RGB",
+  "price": 129.9,
+  "stock": 25,
+  "categoryIds": ["{{category.response.body.$.data.id}}"]
+}
+
+### Get one product (with its categories)
+GET {{baseUrl}}/products/{{product.response.body.$.data.id}}
+Authorization: Bearer {{userLogin.response.body.$.data.accessToken}}
+
+### List: paginated (meta has page, limit, total, totalPages)
+GET {{baseUrl}}/products?page=1&limit=10
+Authorization: Bearer {{userLogin.response.body.$.data.accessToken}}
+
+### List with filters: search (name or SKU), category, active, sorting
+GET {{baseUrl}}/products?search=keyboard&categoryId={{category.response.body.$.data.id}}&isActive=true&sortBy=price&sortOrder=asc
+Authorization: Bearer {{userLogin.response.body.$.data.accessToken}}
+
+### The agent can read products too
+GET {{baseUrl}}/products?limit=5
+X-API-Key: {{agentKey}}
+
+# ---------------------------------------------------------------------------
+# Update / delete
+# ---------------------------------------------------------------------------
+
+### Update price and stock (only changed fields are written to the audit log)
+PATCH {{baseUrl}}/products/{{product.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+  "price": "99.50",
+  "stock": 10
+}
+
+### Update categories: categoryIds REPLACES the set ([] removes all)
+PATCH {{baseUrl}}/products/{{product.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+  "categoryIds": []
+}
+
+# ---------------------------------------------------------------------------
+# Errors
+# ---------------------------------------------------------------------------
+
+### Normal user cannot create: 403 FORBIDDEN
+POST {{baseUrl}}/products
+Authorization: Bearer {{userLogin.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+  "sku": "NOPE-1",
+  "name": "Nope",
+  "price": "1.00"
+}
+
+### Agent cannot create products: 403 FORBIDDEN
+POST {{baseUrl}}/products
+X-API-Key: {{agentKey}}
+Content-Type: application/json
+
+{
+  "sku": "NOPE-2",
+  "name": "Nope",
+  "price": "1.00"
+}
+
+### Duplicate SKU: 409 CONFLICT
+POST {{baseUrl}}/products
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+  "sku": "{{product.response.body.$.data.sku}}",
+  "name": "Duplicate",
+  "price": "1.00"
+}
+
+### Validation errors: 400 with details per field
+POST {{baseUrl}}/products
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+  "sku": "bad sku!",
+  "name": "",
+  "price": "-1.999",
+  "stock": -5,
+  "color": "red"
+}
+
+### Unknown category id: 400, nothing is written
+POST {{baseUrl}}/products
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+  "sku": "X-{{$timestamp}}",
+  "name": "X",
+  "price": "1.00",
+  "categoryIds": ["00000000-0000-4000-8000-000000000000"]
+}
+
+### Unknown product: 404 NOT_FOUND
+GET {{baseUrl}}/products/00000000-0000-4000-8000-000000000000
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+
+### Not a UUID: 400
+GET {{baseUrl}}/products/not-a-uuid
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+
+### Delete: 200 { id } (its category links are removed; categories stay)
+DELETE {{baseUrl}}/products/{{product.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.accessToken}}

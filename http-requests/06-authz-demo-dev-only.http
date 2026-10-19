@@ -1,0 +1,52 @@
+### Role matrix demo routes: ONLY when NODE_ENV=development
+# The Docker API runs in production mode, so these return 404 there.
+# Start the API locally in development mode first:
+#   docker compose up -d db
+#   PORT=3001 npm run start:dev      (PowerShell: $env:PORT=3001; npm run start:dev)
+
+@baseUrl = http://localhost:3001/api
+@agentKey = pmk_00000000_DEV-ONLY_local-agent-key_CHANGE-ME-outside0
+
+### Logins
+# @name user
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "user@example.com", "password": "User12345" }
+
+###
+# @name admin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "admin@example.com", "password": "Admin12345" }
+
+### public: 200 for everyone, also without credentials
+GET {{baseUrl}}/authz-demo/public
+
+### any: 401 anonymous, 200 for every role
+GET {{baseUrl}}/authz-demo/any
+Authorization: Bearer {{user.response.body.$.data.accessToken}}
+
+### admin-only: user -> 403
+POST {{baseUrl}}/authz-demo/admin-only
+Authorization: Bearer {{user.response.body.$.data.accessToken}}
+
+### admin-only: admin -> 201
+POST {{baseUrl}}/authz-demo/admin-only
+Authorization: Bearer {{admin.response.body.$.data.accessToken}}
+
+### admin-only: agent -> 403
+POST {{baseUrl}}/authz-demo/admin-only
+X-API-Key: {{agentKey}}
+
+### admin-agent: agent -> 201
+POST {{baseUrl}}/authz-demo/admin-agent
+X-API-Key: {{agentKey}}
+
+### no-roles: 403 for EVERY role (fail-closed proof; the server logs a warning)
+GET {{baseUrl}}/authz-demo/no-roles
+Authorization: Bearer {{admin.response.body.$.data.accessToken}}
+
+### no-roles without credentials: 401
+GET {{baseUrl}}/authz-demo/no-roles

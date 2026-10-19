@@ -1,0 +1,98 @@
+### Account management: super_admin only
+# Users are never deleted; access is removed by deactivation.
+
+@baseUrl = http://localhost:3000/api
+
+### Login as super_admin
+# @name sa
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "superadmin@example.com",
+  "password": "SuperAdmin123"
+}
+
+### List users (paginated)
+# @name users
+GET {{baseUrl}}/users?page=1&limit=20
+Authorization: Bearer {{sa.response.body.$.data.accessToken}}
+
+### Filter: only role "user"
+GET {{baseUrl}}/users?role=user
+Authorization: Bearer {{sa.response.body.$.data.accessToken}}
+
+### Filter: only inactive accounts
+GET {{baseUrl}}/users?isActive=false
+Authorization: Bearer {{sa.response.body.$.data.accessToken}}
+
+# ---------------------------------------------------------------------------
+# Deactivate / activate a test user (created here, so the demo accounts stay intact)
+# ---------------------------------------------------------------------------
+
+### Register a throwaway user
+# @name newUser
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "temp{{$timestamp}}@example.com",
+  "name": "Temp User",
+  "password": "Secret123"
+}
+
+### Log in as that user
+# @name tempLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{newUser.response.body.$.data.email}}",
+  "password": "Secret123"
+}
+
+### Their token works: 200
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{tempLogin.response.body.$.data.accessToken}}
+
+### Deactivate: 200, isActive false + all their sessions revoked (one transaction)
+PATCH {{baseUrl}}/users/{{newUser.response.body.$.data.id}}/deactivate
+Authorization: Bearer {{sa.response.body.$.data.accessToken}}
+
+### Their token now fails immediately: 401
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{tempLogin.response.body.$.data.accessToken}}
+
+### Activate again: 200 (old sessions stay revoked; they must log in again)
+PATCH {{baseUrl}}/users/{{newUser.response.body.$.data.id}}/activate
+Authorization: Bearer {{sa.response.body.$.data.accessToken}}
+
+# ---------------------------------------------------------------------------
+# Rules
+# ---------------------------------------------------------------------------
+
+### A super_admin can never be deactivated: 403
+PATCH {{baseUrl}}/users/{{sa.response.body.$.data.user.id}}/deactivate
+Authorization: Bearer {{sa.response.body.$.data.accessToken}}
+
+### Unknown id: 404
+PATCH {{baseUrl}}/users/00000000-0000-4000-8000-000000000000/deactivate
+Authorization: Bearer {{sa.response.body.$.data.accessToken}}
+
+### There is no delete endpoint: 404
+DELETE {{baseUrl}}/users/{{newUser.response.body.$.data.id}}
+Authorization: Bearer {{sa.response.body.$.data.accessToken}}
+
+### An admin cannot manage users: 403
+# @name admin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Admin12345"
+}
+
+###
+GET {{baseUrl}}/users
+Authorization: Bearer {{admin.response.body.$.data.accessToken}}

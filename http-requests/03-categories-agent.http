@@ -1,0 +1,160 @@
+### Categories and their product links, done by the AI AGENT (API key)
+# This is exactly what the MCP server will do. Everyone can read;
+# super_admin, admin and agent can write categories and links.
+
+@baseUrl = http://localhost:3000/api
+@agentKey = pmk_00000000_DEV-ONLY_local-agent-key_CHANGE-ME-outside0
+
+### Login as admin (only to create two products for the links)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Admin12345"
+}
+
+### Product A
+# @name productA
+POST {{baseUrl}}/products
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+  "sku": "A-{{$timestamp}}",
+  "name": "Product A",
+  "price": "10.00"
+}
+
+### Product B
+# @name productB
+POST {{baseUrl}}/products
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+  "sku": "B-{{$timestamp}}",
+  "name": "Product B",
+  "price": "20.00"
+}
+
+# ---------------------------------------------------------------------------
+# Category CRUD as the agent
+# ---------------------------------------------------------------------------
+
+### Agent creates a category: 201
+# @name category
+POST {{baseUrl}}/categories
+X-API-Key: {{agentKey}}
+Content-Type: application/json
+
+{
+  "name": "Agent category {{$timestamp}}",
+  "description": "Created by the AI agent"
+}
+
+### List categories (with productCount)
+GET {{baseUrl}}/categories?page=1&limit=20
+X-API-Key: {{agentKey}}
+
+### Search categories by name
+GET {{baseUrl}}/categories?search=agent
+X-API-Key: {{agentKey}}
+
+### Get one category (with its products)
+GET {{baseUrl}}/categories/{{category.response.body.$.data.id}}
+X-API-Key: {{agentKey}}
+
+### Rename / change description
+PATCH {{baseUrl}}/categories/{{category.response.body.$.data.id}}
+X-API-Key: {{agentKey}}
+Content-Type: application/json
+
+{
+  "name": "Renamed {{$timestamp}}",
+  "description": "Updated by the agent"
+}
+
+# ---------------------------------------------------------------------------
+# Product links
+# ---------------------------------------------------------------------------
+
+### Add products (already linked ones are skipped)
+POST {{baseUrl}}/categories/{{category.response.body.$.data.id}}/products
+X-API-Key: {{agentKey}}
+Content-Type: application/json
+
+{
+  "productIds": ["{{productA.response.body.$.data.id}}"]
+}
+
+### Replace the set exactly: now only product B
+PUT {{baseUrl}}/categories/{{category.response.body.$.data.id}}/products
+X-API-Key: {{agentKey}}
+Content-Type: application/json
+
+{
+  "productIds": ["{{productB.response.body.$.data.id}}"]
+}
+
+### Remove one product from the category: 200
+DELETE {{baseUrl}}/categories/{{category.response.body.$.data.id}}/products/{{productB.response.body.$.data.id}}
+X-API-Key: {{agentKey}}
+
+### Remove it again: 404 (the product is not in this category)
+DELETE {{baseUrl}}/categories/{{category.response.body.$.data.id}}/products/{{productB.response.body.$.data.id}}
+X-API-Key: {{agentKey}}
+
+### Unknown product id: 400 with the exact unknown id, nothing written
+POST {{baseUrl}}/categories/{{category.response.body.$.data.id}}/products
+X-API-Key: {{agentKey}}
+Content-Type: application/json
+
+{
+  "productIds": ["00000000-0000-4000-8000-000000000000"]
+}
+
+# ---------------------------------------------------------------------------
+# Errors
+# ---------------------------------------------------------------------------
+
+### Duplicate name (case-insensitive): 409 CONFLICT
+POST {{baseUrl}}/categories
+X-API-Key: {{agentKey}}
+Content-Type: application/json
+
+{
+  "name": "RENAMED {{$timestamp}}"
+}
+
+### Normal user cannot create categories: 403
+# @name userLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "User12345"
+}
+
+###
+POST {{baseUrl}}/categories
+Authorization: Bearer {{userLogin.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Not allowed"
+}
+
+### Delete the category: 200 { id } (products stay, only links go)
+DELETE {{baseUrl}}/categories/{{category.response.body.$.data.id}}
+X-API-Key: {{agentKey}}
+
+### Clean up the two products
+DELETE {{baseUrl}}/products/{{productA.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.accessToken}}
+
+###
+DELETE {{baseUrl}}/products/{{productB.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.accessToken}}

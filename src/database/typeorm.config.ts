@@ -36,5 +36,10 @@ export function buildTypeOrmOptions(
     entities: [join(__dirname, '..', '**', '*.entity.{ts,js}')],
     migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
     migrationsTableName: 'migrations',
+
+    // UUID defaults use gen_random_uuid(), built into PostgreSQL 13+. No
+    // extension (and no superuser right to create one) is needed.
+    uuidExtension: 'pgcrypto',
+    installExtensions: false,
   };
 }

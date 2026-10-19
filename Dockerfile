@@ -38,3 +38,11 @@ USER node
 
 EXPOSE 3000
 ENTRYPOINT ["sh", "./docker/entrypoint.sh"]
+
+# ---------- test: source + dev dependencies, for unit and e2e tests ----------
+# Used by the `e2e` compose service (profile "test"); never shipped.
+FROM deps AS test
+COPY tsconfig.json tsconfig.build.json nest-cli.json jest.config.ts ./
+COPY src ./src
+COPY test ./test
+CMD ["npm", "run", "test:e2e:ci"]

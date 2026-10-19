@@ -6,6 +6,7 @@ const validEnv = {
   DB_USERNAME: 'postgres',
   DB_PASSWORD: 'secret',
   DB_NAME: 'products',
+  JWT_SECRET: 'test-secret-that-is-at-least-32-characters',
 };
 
 describe('validateEnv', () => {
@@ -14,7 +15,7 @@ describe('validateEnv', () => {
 
     expect(env.NODE_ENV).toBe(NodeEnv.Development);
     expect(env.PORT).toBe(3000);
-    expect(env.DB_PORT).toBe(5432);
+    expect(env.DB_PORT).toBe(5433);
     expect(env.DB_LOGGING).toBe(false);
     expect(env.CORS_ORIGINS).toEqual([]);
     expect(env.TRUST_PROXY).toBe('false');

@@ -12,6 +12,7 @@ import {
   Matches,
   Max,
   Min,
+  MinLength,
   validateSync,
 } from 'class-validator';
 
@@ -65,11 +66,15 @@ export class EnvironmentVariables {
   @IsNotEmpty()
   DB_HOST!: string;
 
+  /**
+   * Host port of the Docker Postgres (5432 is often taken by a local Postgres /
+   * pgAdmin install). Inside the api container Compose sets 5432.
+   */
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(65535)
-  DB_PORT: number = 5432;
+  DB_PORT: number = 5433;
 
   @IsString()
   @IsNotEmpty()
@@ -104,16 +109,63 @@ export class EnvironmentVariables {
       'TRUST_PROXY must be true, false, a hop count, or a comma-separated list of IPs/subnets',
   })
   TRUST_PROXY: string = 'false';
+
+  /** bcrypt cost factor. Each +1 doubles the hashing time. */
+  @Type(() => Number)
+  @IsInt()
+  @Min(10)
+  @Max(15)
+  BCRYPT_ROUNDS: number = 12;
+
+  /** HMAC key for HS256 access tokens. At least 32 characters (256 bits). */
+  @IsString()
+  @MinLength(32)
+  JWT_SECRET!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  JWT_ISSUER: string = 'product-management-api';
+
+  @IsString()
+  @IsNotEmpty()
+  JWT_AUDIENCE: string = 'product-management-clients';
+
+  /** Access token lifetime in seconds. Default 15 minutes. */
+  @Type(() => Number)
+  @IsInt()
+  @Min(60)
+  @Max(86_400)
+  JWT_ACCESS_TTL_SECONDS: number = 900;
+
+  /** Refresh token (session) lifetime in seconds. Default 7 days. */
+  @Type(() => Number)
+  @IsInt()
+  @Min(3_600)
+  @Max(7_776_000)
+  REFRESH_TOKEN_TTL_SECONDS: number = 604_800;
+
+  /** Rate limit window for register, login and refresh, in seconds. */
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  THROTTLE_AUTH_TTL_SECONDS: number = 60;
+
+  /** Max requests per IP per window for register, login and refresh. */
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  THROTTLE_AUTH_LIMIT: number = 10;
 }
 
 /**
- * Validates and types the raw environment. Throws one error listing every
- * invalid variable, so the app (and the TypeORM CLI) refuse to start.
+ * Validates and types a raw environment against an env class. Throws one error
+ * listing every invalid variable, so the process refuses to start.
  */
-export function validateEnv(
+export function validateConfig<T extends object>(
+  envClass: new () => T,
   config: Record<string, unknown>,
-): EnvironmentVariables {
-  const env = plainToInstance(EnvironmentVariables, config);
+): T {
+  const env = plainToInstance(envClass, config);
   const errors = validateSync(env, { skipMissingProperties: false });
 
   if (errors.length > 0) {
@@ -125,6 +177,13 @@ export function validateEnv(
   }
 
   return env;
+}
+
+/** Used by the app (ConfigModule) and the TypeORM CLI. */
+export function validateEnv(
+  config: Record<string, unknown>,
+): EnvironmentVariables {
+  return validateConfig(EnvironmentVariables, config);
 }
 
 /** Converts the validated TRUST_PROXY string into the value Express expects. */

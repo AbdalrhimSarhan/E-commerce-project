@@ -1,0 +1,30 @@
+### Health check and API conventions (no login needed)
+# Click "Send Request" above each request. Requests are separated by ###.
+
+@baseUrl = http://localhost:3000/api
+
+### Health: 200 { status: "ok" } (503 SERVICE_UNAVAILABLE when the DB is down)
+GET {{baseUrl}}/health
+
+### Your own request id is echoed in the X-Request-Id header and meta.requestId
+GET {{baseUrl}}/health
+X-Request-Id: my-test-123
+
+### An invalid request id is replaced by a generated UUID
+GET {{baseUrl}}/health
+X-Request-Id: bad id!
+
+### Unknown route: 404 NOT_FOUND (error envelope)
+GET {{baseUrl}}/does-not-exist
+
+### Route outside /api: also the 404 envelope
+GET http://localhost:3000/foo
+
+### Malformed JSON: 400 VALIDATION_ERROR
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{bad json
+
+### OpenAPI document (Swagger UI: http://localhost:3000/api/docs)
+GET {{baseUrl}}/docs-json

@@ -7,7 +7,6 @@ coverage
 .env.*
 !.env.example
 docs
-test
 *.md
 .vscode
 .idea
