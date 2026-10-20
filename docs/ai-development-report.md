@@ -2,6 +2,10 @@
 
 > **Draft.** Written from the actual development session. Sections marked
 > **[to complete]** are for the developer to fill in or correct before submission.
+>
+> This English report is the official one. An Arabic account of the
+> engineering process, in the developer's own words, is in
+> [engineering-process.ar.md](engineering-process.ar.md).
 
 ## 1. Tools
 

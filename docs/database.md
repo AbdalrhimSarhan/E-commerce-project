@@ -141,6 +141,8 @@ Append-only: the trigger `TRG_audit_logs_append_only` makes every `UPDATE` and
 `DELETE` fail (`audit_logs is append-only`). Indexes: `IDX_audit_logs_occurred_at`
 (newest-first listing), `IDX_audit_logs_resource (resource_type, resource_id)`
 ("history of this product"), `IDX_audit_logs_actor_id` ("what did this agent do").
+Through the API only super_admin can read it (`GET /api/audit-logs`, separation
+of duties); nobody can write to it.
 `FK_audit_logs_actor_id ... ON DELETE RESTRICT`: since users are never deleted,
 an audit row always points to its actor. Email and role are also stored as
 snapshots, so the row stays correct even if the user changes later.

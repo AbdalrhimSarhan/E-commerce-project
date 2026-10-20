@@ -11,6 +11,7 @@ Built with NestJS 12, TypeScript (strict), PostgreSQL 16, TypeORM 0.3 and Docker
 - **Design decisions:** [docs/design-decisions.md](docs/design-decisions.md)
 - **MCP tools (schemas, examples, errors):** [docs/mcp-tools.md](docs/mcp-tools.md)
 - **AI-assisted development report:** [docs/ai-development-report.md](docs/ai-development-report.md)
+  (Arabic account of the engineering process: [docs/engineering-process.ar.md](docs/engineering-process.ar.md))
 - **Phase reports:** [docs/reports/](docs/reports/)
 
 ## Run with Docker
@@ -78,7 +79,7 @@ a protected route without `@Roles` is **denied** (fail-closed).
 | --- | --- | --- |
 | Products | super_admin, admin, user, agent | super_admin, admin |
 | Categories (incl. product links) | super_admin, admin, user, agent | super_admin, admin, **agent** |
-| Audit log | super_admin, admin | (nobody: append-only) |
+| Audit log | super_admin only (separation of duties) | (nobody: append-only) |
 | Users (list, activate, deactivate) | super_admin | super_admin |
 | Own session (logout, logout-all) | | super_admin, admin, user |
 
@@ -122,7 +123,7 @@ All under `/api`. Every response uses one envelope (see [API conventions](#api-c
 | POST · PATCH · DELETE | `/categories` · `/categories/:id` | super_admin, admin, agent |
 | POST · PUT | `/categories/:id/products` (add · replace, body `{ productIds }`) | super_admin, admin, agent |
 | DELETE | `/categories/:id/products/:productId` | super_admin, admin, agent |
-| GET | `/audit-logs` (`actorId, action, outcome, resourceType, resourceId, from, to`) | super_admin, admin |
+| GET | `/audit-logs` (`actorId, action, outcome, resourceType, resourceId, from, to`) | super_admin |
 | GET | `/users` (`role, isActive`) | super_admin |
 | PATCH | `/users/:id/deactivate` · `/users/:id/activate` | super_admin |
 
@@ -244,6 +245,47 @@ MCP tools have data to work with right away:
 The data lives in [`src/database/seeds/demo-catalog.ts`](src/database/seeds/demo-catalog.ts).
 To load it again from scratch: `docker compose down -v && docker compose up -d --build`
 (this deletes the database volume).
+
+#### Demo ids
+
+Demo data uses **fixed, readable UUIDs**, so you can call `get_product` /
+`get_category` (or `GET /api/products/:id`, `GET /api/categories/:id`) directly.
+They are valid version-4 UUIDs; anything created through the API gets a
+random UUID.
+
+| Product id | SKU | Name | Price | Categories |
+| --- | --- | --- | --- | --- |
+| `10000000-0000-4000-8000-000000000001` | LAP-14-PRO | ProBook 14 Laptop | 1299.00 | Laptops & Computers, Home Office |
+| `10000000-0000-4000-8000-000000000002` | LAP-13-AIR | AirLite 13 Ultrabook | 899.00 | Laptops & Computers |
+| `10000000-0000-4000-8000-000000000003` | PC-MINI-01 | Mini PC N100 | 329.90 | Laptops & Computers, Home Office |
+| `10000000-0000-4000-8000-000000000004` | MON-27-4K | 27" 4K IPS Monitor | 449.00 | Monitors & Displays, Home Office |
+| `10000000-0000-4000-8000-000000000005` | MON-34-UW | 34" Ultrawide Curved Monitor | 599.00 | Monitors & Displays |
+| `10000000-0000-4000-8000-000000000006` | MON-16-PORT | 16" Portable USB-C Monitor | 179.00 | Monitors & Displays, Home Office, Laptops & Computers |
+| `10000000-0000-4000-8000-000000000007` | KB-MECH-75 | Mechanical Keyboard 75% | 139.90 | Keyboards & Mice, Home Office |
+| `10000000-0000-4000-8000-000000000008` | KB-WL-SLIM | Slim Wireless Keyboard | 59.00 | Keyboards & Mice |
+| `10000000-0000-4000-8000-000000000009` | MS-ERGO-V | Ergonomic Vertical Mouse | 49.90 | Keyboards & Mice, Home Office |
+| `10000000-0000-4000-8000-000000000010` | MS-GAME-PRO | Pro Gaming Mouse | 79.00 | Keyboards & Mice |
+| `10000000-0000-4000-8000-000000000011` | AUD-ANC-H1 | Noise-Cancelling Headphones H1 | 249.00 | Audio, Home Office |
+| `10000000-0000-4000-8000-000000000012` | AUD-BUDS-2 | True Wireless Earbuds 2 | 99.00 | Audio |
+| `10000000-0000-4000-8000-000000000013` | AUD-SPK-BT | Portable Bluetooth Speaker | 69.90 | Audio, Smart Home |
+| `10000000-0000-4000-8000-000000000014` | AUD-MIC-USB | USB Condenser Microphone | 89.00 | Audio, Home Office |
+| `10000000-0000-4000-8000-000000000015` | SH-BULB-4 | Smart LED Bulb (4-pack) | 39.90 | Smart Home |
+| `10000000-0000-4000-8000-000000000016` | SH-PLUG-2 | Smart Plug with Energy Meter (2-pack) | 29.90 | Smart Home |
+| `10000000-0000-4000-8000-000000000017` | NET-MESH-3 | Wi-Fi 6 Mesh System (3-pack) | 279.00 | Networking, Smart Home |
+| `10000000-0000-4000-8000-000000000018` | NET-SW-8P | 8-Port Gigabit Switch | 34.90 | *(none)* |
+| `10000000-0000-4000-8000-000000000019` | ACC-HUB-7IN1 | USB-C Hub 7-in-1 | 44.90 | *(none)* |
+| `10000000-0000-4000-8000-000000000020` | ACC-STAND-AL | Aluminium Laptop Stand | 24.90 | *(none)* |
+
+| Category id | Name | Products |
+| --- | --- | --- |
+| `20000000-0000-4000-8000-000000000001` | Laptops & Computers | 4 |
+| `20000000-0000-4000-8000-000000000002` | Monitors & Displays | 3 |
+| `20000000-0000-4000-8000-000000000003` | Keyboards & Mice | 4 |
+| `20000000-0000-4000-8000-000000000004` | Audio | 4 |
+| `20000000-0000-4000-8000-000000000005` | Smart Home | 4 |
+| `20000000-0000-4000-8000-000000000006` | Home Office | 8 |
+| `20000000-0000-4000-8000-000000000007` | Networking | 1 |
+| `20000000-0000-4000-8000-000000000008` | Clearance | 0 |
 
 ## API conventions
 

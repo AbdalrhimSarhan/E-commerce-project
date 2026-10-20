@@ -73,11 +73,11 @@ const MATRIX: Array<[Method, string, Record<Who, number>]> = [
     `/api/users/${ID}/activate`,
     { anonymous: 401, user: 403, admin: 403, superAdmin: 404, agent: 403 },
   ],
-  // audit log
+  // audit log: super_admin only (separation of duties)
   [
     'get',
     '/api/audit-logs',
-    { anonymous: 401, user: 403, admin: 200, superAdmin: 200, agent: 403 },
+    { anonymous: 401, user: 403, admin: 403, superAdmin: 200, agent: 403 },
   ],
   // products: read for all, write for super_admin + admin
   [
@@ -242,5 +242,60 @@ describe('Authorization role matrix (e2e)', () => {
       'SELECT count(*) FROM audit_logs',
     );
     expect(Number(count)).toBe(0);
+  });
+
+  describe('audit log readers: super_admin only (separation of duties)', () => {
+    beforeAll(async () => {
+      await resetDatabase(ctx.dataSource);
+      actors = await createActors(ctx);
+    });
+
+    it.each(['admin', 'user', 'agent'] as const)(
+      '%s -> 403 FORBIDDEN',
+      async (who) => {
+        const res = await request(ctx.http)
+          .get('/api/audit-logs')
+          .set(actors[who].headers)
+          .expect(403);
+        expect(body(res).error?.code).toBe('FORBIDDEN');
+      },
+    );
+
+    it('super_admin -> 200 with the trail', async () => {
+      const res = await request(ctx.http)
+        .get('/api/audit-logs')
+        .set(actors.superAdmin.headers)
+        .expect(200);
+      expect(Array.isArray(body(res).data)).toBe(true);
+    });
+
+    it("records an admin's denied read like every other denial (behaviour unchanged)", async () => {
+      await request(ctx.http)
+        .get('/api/audit-logs')
+        .set(actors.admin.headers)
+        .expect(403);
+
+      const rows = await ctx.dataSource.query<
+        Array<{ actor_email: string; metadata: Record<string, unknown> }>
+      >(
+        `SELECT actor_email, metadata FROM audit_logs
+          WHERE outcome = 'denied' AND metadata->>'path' = '/api/audit-logs'
+          ORDER BY occurred_at DESC LIMIT 1`,
+      );
+      expect(rows[0]).toMatchObject({
+        actor_email: actors.admin.user.email,
+        metadata: { reason: 'role_not_allowed', allowedRoles: ['super_admin'] },
+      });
+    });
+
+    it('offers no way to write to the audit log', async () => {
+      for (const method of ['post', 'put', 'patch', 'delete'] as const) {
+        await request(ctx.http)
+          [method]('/api/audit-logs')
+          .set(actors.superAdmin.headers)
+          .send({})
+          .expect(404);
+      }
+    });
   });
 });

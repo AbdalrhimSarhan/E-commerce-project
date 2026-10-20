@@ -526,13 +526,19 @@ describe('Products and categories (e2e)', () => {
     });
   });
 
-  it('exposes the audit trail to admins with filters', async () => {
+  it('exposes the audit trail of admin changes to super_admin only, with filters', async () => {
     const product = await createProduct('P-1');
     await request(ctx.http)
       .patch(`/api/products/${product.id}`)
       .set(admin())
       .send({ stock: 3 })
       .expect(200);
+
+    // Separation of duties: the admin who made the change cannot read its trail.
+    await request(ctx.http)
+      .get(`/api/audit-logs?resourceId=${product.id}`)
+      .set(admin())
+      .expect(403);
 
     const res = await request(ctx.http)
       .get(`/api/audit-logs?resourceType=product&resourceId=${product.id}`)

@@ -61,6 +61,38 @@ describe('Demo catalog seed (e2e, real DB)', () => {
     );
   });
 
+  it('stores the fixed demo ids, so get-by-id works with them through the API', async () => {
+    await runSeed();
+    const admin = await createUser(ctx.dataSource, UserRole.Admin);
+    const auth = {
+      Authorization: `Bearer ${(await login(ctx.http, admin.email)).accessToken}`,
+    };
+
+    const product = await request(ctx.http)
+      .get('/api/products/10000000-0000-4000-8000-000000000001')
+      .set(auth)
+      .expect(200);
+    expect(body<ApiProduct>(product).data?.sku).toBe('LAP-14-PRO');
+
+    const category = await request(ctx.http)
+      .get('/api/categories/20000000-0000-4000-8000-000000000006')
+      .set(auth)
+      .expect(200);
+    expect(
+      body<{ name: string; productCount: number }>(category).data,
+    ).toMatchObject({
+      name: 'Home Office',
+      productCount: 8,
+    });
+
+    const stored = await ctx.dataSource
+      .getRepository(Product)
+      .find({ select: { id: true } });
+    expect(stored.map((p) => p.id).sort()).toEqual(
+      DEMO_PRODUCTS.map((p) => p.id).sort(),
+    );
+  });
+
   it('creates the links exactly as specified, visible through the API', async () => {
     await runSeed();
     const admin = await createUser(ctx.dataSource, UserRole.Admin);

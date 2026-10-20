@@ -192,7 +192,7 @@ Each entry of `products` is `{ id, sku, name, price, isActive }`.
 ### Write tools
 
 **Permission for all:** super_admin, admin or agent. Every change is written to
-the audit log **by the API**, with `actor_type = agent`, `auth_method = api_key`
+the audit log **by the API** (readable by super_admin only, via `GET /api/audit-logs`), with `actor_type = agent`, `auth_method = api_key`
 and the tool call's `requestId`.
 
 #### `create_category` (`destructiveHint: false`, `idempotentHint: false`)

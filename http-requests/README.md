@@ -17,7 +17,7 @@ Ready-to-run requests for every route, for the VS Code extension
 | `02-products.http` | product CRUD, filters, pagination, permissions, validation errors |
 | `03-categories-agent.http` | category CRUD and product links **as the AI agent** (what MCP will do) |
 | `04-users-super-admin.http` | list users, deactivate/activate, the super_admin rules |
-| `05-audit-logs.http` | the audit trail with every filter |
+| `05-audit-logs.http` | the audit trail with every filter (super_admin only; admin and agent get 403) |
 | `06-authz-demo-dev-only.http` | role matrix demo routes (needs `npm run start:dev` on port 3001) |
 
 The accounts and the agent key are the local demo values from `.env.example`.

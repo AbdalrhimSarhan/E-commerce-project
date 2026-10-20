@@ -52,6 +52,8 @@ const EXPECTED_TOOLS = [
 describe('MCP server (e2e, real API + DB)', () => {
   let agent: Client;
   let adminToken: string;
+  /** Only super_admin may read the audit log (separation of duties). */
+  let superAdminToken: string;
   const run = unique();
   const products: Product[] = [];
   const categoryIds: string[] = [];
@@ -59,6 +61,7 @@ describe('MCP server (e2e, real API + DB)', () => {
   before(async () => {
     agent = await connect({ 'X-API-Key': AGENT_KEY });
     adminToken = await loginAdmin();
+    superAdminToken = await loginSuperAdmin();
 
     // The agent may not create products, so an admin prepares two through the API.
     for (const letter of ['A', 'B']) {
@@ -211,8 +214,11 @@ describe('MCP server (e2e, real API + DB)', () => {
     assert.equal((await call(agent, 'get_product', { id: productB().id })).isError, false);
 
     // 4: the audit row was written by the API, as the agent, with OUR request id.
+    // Read as super_admin: the audit log is super_admin only (admin -> 403).
+    const asAdmin = await api(`/audit-logs?resourceId=${category.id}`, { token: adminToken });
+    assert.equal(asAdmin.status, 403);
     const audit = await api<AuditRow[]>(`/audit-logs?resourceId=${category.id}&action=category.create`, {
-      token: adminToken,
+      token: superAdminToken,
     });
     assert.equal(audit.status, 200);
     const [row] = audit.data;
@@ -221,7 +227,9 @@ describe('MCP server (e2e, real API + DB)', () => {
     assert.equal(row.authMethod, 'api_key');
     assert.equal(row.requestId, createRequestId);
 
-    const history = await api<AuditRow[]>(`/audit-logs?resourceId=${category.id}&limit=20`, { token: adminToken });
+    const history = await api<AuditRow[]>(`/audit-logs?resourceId=${category.id}&limit=20`, {
+      token: superAdminToken,
+    });
     assert.deepEqual(
       history.data.map((r) => r.action).reverse(),
       [
@@ -318,7 +326,6 @@ describe('MCP server (e2e, real API + DB)', () => {
 
   // 7 ------------------------------------------------------------------------
   it('deactivated agent -> UNAUTHORIZED; works again after reactivation', async () => {
-    const superAdminToken = await loginSuperAdmin();
     const me = await fetch(`${process.env.API_URL ?? 'http://localhost:3000/api'}/auth/me`, {
       headers: { 'X-API-Key': AGENT_KEY },
     });

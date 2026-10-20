@@ -1,17 +1,17 @@
-### Audit log: super_admin and admin (read only; the table is append-only)
+### Audit log: super_admin ONLY (separation of duties; read only, the table is append-only)
 # Run some requests from the other files first, then look here.
 
 @baseUrl = http://localhost:3000/api
 @agentKey = pmk_00000000_DEV-ONLY_local-agent-key_CHANGE-ME-outside0
 
-### Login as admin
+### Login as super_admin (the only role that can read the audit log)
 # @name login
 POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "admin@example.com",
-  "password": "Admin12345"
+  "email": "superadmin@example.com",
+  "password": "SuperAdmin123"
 }
 
 ### Newest first
@@ -42,6 +42,20 @@ Authorization: Bearer {{login.response.body.$.data.accessToken}}
 ### A time window (ISO 8601)
 GET {{baseUrl}}/audit-logs?from=2026-01-01T00:00:00Z&to=2030-01-01T00:00:00Z&limit=5
 Authorization: Bearer {{login.response.body.$.data.accessToken}}
+
+### An admin cannot read the audit log: 403 (separation of duties; the denial is audited)
+# @name admin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Admin12345"
+}
+
+###
+GET {{baseUrl}}/audit-logs
+Authorization: Bearer {{admin.response.body.$.data.accessToken}}
 
 ### The agent cannot read the audit log: 403 (and that denial is itself audited)
 GET {{baseUrl}}/audit-logs

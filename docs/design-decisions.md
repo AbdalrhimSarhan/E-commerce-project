@@ -80,7 +80,11 @@ provider** (correct for production SSO, far too much for this scope).
   so the log can't claim something that was rolled back, and a change can't
   commit without its log entry. No-op updates write no row.
 - **Tamper resistance:** a database trigger rejects `UPDATE`/`DELETE` on
-  `audit_logs`. The API only offers a read endpoint (super_admin, admin).
+  `audit_logs`. The API only offers a read endpoint, for super_admin only.
+- **Separation of duties:** admins make the catalog changes, so an admin must
+  not be the one who reviews the audit trail of those changes. Only super_admin
+  can read it (`GET /api/audit-logs`); admin, user and agent get 403, and those
+  denied reads are audited like every other denial.
 - Trade-off: anonymous 401s are not audited (they never reach the roles guard);
   they would mostly be noise. Failed logins are handled by rate limiting, not the
   audit log.
@@ -105,6 +109,14 @@ provider** (correct for production SSO, far too much for this scope).
 - `DELETE` returns `200 { id }` (keeps the envelope). Lists are paginated
   (max 100) with a stable sort.
 - Request ids (`X-Request-Id`) tie together response, logs and audit rows.
+- **Ids stay UUIDs everywhere.** They can't be guessed or enumerated, they leak
+  no business data (no counts, no order of creation), and they need no central
+  counter: the database generates them (`gen_random_uuid()`), or the app does
+  where it needs the id before the insert (the session id inside the refresh
+  token). Sequential ids were considered for easier demos and rejected. Only the
+  seeded demo data uses fixed, readable UUIDs (`10000000-0000-4000-8000-0000000000NN`
+  for products, `20000000-…` for categories; valid version-4 UUIDs). Everything
+  created through the API gets a random UUID.
 
 ## 6. Reliability and operations
 

@@ -1,5 +1,5 @@
 import { plainToInstance } from 'class-transformer';
-import { validateSync, type ValidationError } from 'class-validator';
+import { isUUID, validateSync, type ValidationError } from 'class-validator';
 import type { EntityManager } from 'typeorm';
 import { flattenValidationErrors } from '../../common/exceptions/validation.exception';
 import { CreateCategoryDto } from '../../modules/categories/dto/category.dto';
@@ -13,14 +13,25 @@ import { Product } from '../../modules/products/entities/product.entity';
  * electronics / home / office store. It shows the many-to-many relationship:
  * several products are in 2 or 3 categories, "Clearance" has no products,
  * and 3 products have no category.
+ *
+ * DEMO_ID_NOTE: only this demo data uses fixed, readable UUIDs, so an
+ * evaluator can call get_product / get_category directly:
+ *   products   10000000-0000-4000-8000-0000000000NN  (NN = 01..20)
+ *   categories 20000000-0000-4000-8000-0000000000NN  (NN = 01..08)
+ * They are valid version-4 UUIDs (version nibble 4, variant nibble 8).
+ * Everything created through the API gets a random UUID from the database.
  */
 
 export interface DemoCategory {
+  /** Fixed, readable UUID (see DEMO_ID_NOTE). */
+  id: string;
   name: string;
   description: string;
 }
 
 export interface DemoProduct {
+  /** Fixed, readable UUID (see DEMO_ID_NOTE). */
+  id: string;
   sku: string;
   name: string;
   description: string;
@@ -33,34 +44,42 @@ export interface DemoProduct {
 
 export const DEMO_CATEGORIES: DemoCategory[] = [
   {
+    id: '20000000-0000-4000-8000-000000000001',
     name: 'Laptops & Computers',
     description: 'Notebooks, desktops and mini PCs for work and play.',
   },
   {
+    id: '20000000-0000-4000-8000-000000000002',
     name: 'Monitors & Displays',
     description: 'Office, gaming and creator monitors.',
   },
   {
+    id: '20000000-0000-4000-8000-000000000003',
     name: 'Keyboards & Mice',
     description: 'Mechanical and membrane keyboards, mice and trackpads.',
   },
   {
+    id: '20000000-0000-4000-8000-000000000004',
     name: 'Audio',
     description: 'Headphones, earbuds, speakers and microphones.',
   },
   {
+    id: '20000000-0000-4000-8000-000000000005',
     name: 'Smart Home',
     description: 'Connected lighting, plugs, sensors and cameras.',
   },
   {
+    id: '20000000-0000-4000-8000-000000000006',
     name: 'Home Office',
     description: 'Everything for a productive desk at home.',
   },
   {
+    id: '20000000-0000-4000-8000-000000000007',
     name: 'Networking',
     description: 'Routers, mesh systems, switches and adapters.',
   },
   {
+    id: '20000000-0000-4000-8000-000000000008',
     name: 'Clearance',
     description: 'Last items at reduced prices. Currently empty.',
   },
@@ -68,6 +87,7 @@ export const DEMO_CATEGORIES: DemoCategory[] = [
 
 export const DEMO_PRODUCTS: DemoProduct[] = [
   {
+    id: '10000000-0000-4000-8000-000000000001',
     sku: 'LAP-14-PRO',
     name: 'ProBook 14 Laptop',
     description: '14" 2.8K display, 16 GB RAM, 1 TB SSD, 18-hour battery.',
@@ -76,6 +96,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Laptops & Computers', 'Home Office'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000002',
     sku: 'LAP-13-AIR',
     name: 'AirLite 13 Ultrabook',
     description: '1.1 kg aluminium ultrabook, 8 GB RAM, 512 GB SSD.',
@@ -84,6 +105,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Laptops & Computers'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000003',
     sku: 'PC-MINI-01',
     name: 'Mini PC N100',
     description: 'Palm-sized desktop with 16 GB RAM, dual HDMI and Wi-Fi 6.',
@@ -92,6 +114,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Laptops & Computers', 'Home Office'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000004',
     sku: 'MON-27-4K',
     name: '27" 4K IPS Monitor',
     description:
@@ -101,6 +124,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Monitors & Displays', 'Home Office'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000005',
     sku: 'MON-34-UW',
     name: '34" Ultrawide Curved Monitor',
     description: '3440x1440, 144 Hz, 1500R curve for multitasking and games.',
@@ -109,6 +133,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Monitors & Displays'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000006',
     sku: 'MON-16-PORT',
     name: '16" Portable USB-C Monitor',
     description: 'Lightweight second screen powered by a single USB-C cable.',
@@ -117,6 +142,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Monitors & Displays', 'Home Office', 'Laptops & Computers'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000007',
     sku: 'KB-MECH-75',
     name: 'Mechanical Keyboard 75%',
     description: 'Hot-swappable switches, aluminium case, RGB backlight.',
@@ -125,6 +151,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Keyboards & Mice', 'Home Office'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000008',
     sku: 'KB-WL-SLIM',
     name: 'Slim Wireless Keyboard',
     description: 'Low-profile keys, Bluetooth for up to 3 devices.',
@@ -133,6 +160,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Keyboards & Mice'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000009',
     sku: 'MS-ERGO-V',
     name: 'Ergonomic Vertical Mouse',
     description:
@@ -142,6 +170,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Keyboards & Mice', 'Home Office'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000010',
     sku: 'MS-GAME-PRO',
     name: 'Pro Gaming Mouse',
     description: '26k DPI optical sensor, 58 g lightweight shell.',
@@ -150,6 +179,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Keyboards & Mice'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000011',
     sku: 'AUD-ANC-H1',
     name: 'Noise-Cancelling Headphones H1',
     description:
@@ -159,6 +189,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Audio', 'Home Office'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000012',
     sku: 'AUD-BUDS-2',
     name: 'True Wireless Earbuds 2',
     description: 'IPX4 earbuds with wireless charging case.',
@@ -167,6 +198,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Audio'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000013',
     sku: 'AUD-SPK-BT',
     name: 'Portable Bluetooth Speaker',
     description: 'Waterproof speaker with 20-hour playback.',
@@ -175,6 +207,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Audio', 'Smart Home'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000014',
     sku: 'AUD-MIC-USB',
     name: 'USB Condenser Microphone',
     description: 'Cardioid studio mic for calls, podcasts and streaming.',
@@ -183,6 +216,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Audio', 'Home Office'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000015',
     sku: 'SH-BULB-4',
     name: 'Smart LED Bulb (4-pack)',
     description: 'E27 colour bulbs, app and voice control, no hub needed.',
@@ -191,6 +225,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Smart Home'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000016',
     sku: 'SH-PLUG-2',
     name: 'Smart Plug with Energy Meter (2-pack)',
     description: 'Schedules, remote control and power monitoring.',
@@ -199,6 +234,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: ['Smart Home'],
   },
   {
+    id: '10000000-0000-4000-8000-000000000017',
     sku: 'NET-MESH-3',
     name: 'Wi-Fi 6 Mesh System (3-pack)',
     description: 'Whole-home coverage up to 500 m², 3 Gbit/s combined.',
@@ -208,6 +244,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
   },
   // No category (shows that a product does not need one):
   {
+    id: '10000000-0000-4000-8000-000000000018',
     sku: 'NET-SW-8P',
     name: '8-Port Gigabit Switch',
     description: 'Unmanaged metal desktop switch, fanless.',
@@ -216,6 +253,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: [],
   },
   {
+    id: '10000000-0000-4000-8000-000000000019',
     sku: 'ACC-HUB-7IN1',
     name: 'USB-C Hub 7-in-1',
     description: 'HDMI 4K, 3x USB-A, SD/microSD, 100 W pass-through charging.',
@@ -224,6 +262,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     categories: [],
   },
   {
+    id: '10000000-0000-4000-8000-000000000020',
     sku: 'ACC-STAND-AL',
     name: 'Aluminium Laptop Stand',
     description: 'Foldable stand, six height levels. Discontinued model.',
@@ -234,7 +273,12 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
   },
 ];
 
-/** The product fields as the API's CreateProductDto expects them (the category names are linked separately). */
+/** The category fields as the API's CreateCategoryDto expects them (the id is set by the seed). */
+function categoryFields(category: DemoCategory): Record<string, unknown> {
+  return { name: category.name, description: category.description };
+}
+
+/** The product fields as the API's CreateProductDto expects them (id and category names are handled separately). */
 function productFields(product: DemoProduct): Record<string, unknown> {
   return {
     sku: product.sku,
@@ -275,7 +319,7 @@ export function validateDemoCatalog(
 
   for (const category of categories) {
     const errors = validateSync(
-      plainToInstance(CreateCategoryDto, category),
+      plainToInstance(CreateCategoryDto, categoryFields(category)),
       options,
     );
     if (errors.length > 0)
@@ -297,6 +341,14 @@ export function validateDemoCatalog(
     problems.push('category names must be unique (case-insensitive)');
   const skus = products.map((product) => product.sku.trim().toUpperCase());
   if (new Set(skus).size !== skus.length) problems.push('SKUs must be unique');
+
+  // Fixed ids must be valid version-4 UUIDs (what the API's ParseUUIDPipe and
+  // IsUUID accept) and unique across both lists.
+  const ids = [...categories, ...products].map((item) => item.id);
+  for (const id of ids) {
+    if (!isUUID(id, '4')) problems.push(`id ${id} is not a version-4 UUID`);
+  }
+  if (new Set(ids).size !== ids.length) problems.push('ids must be unique');
 
   const known = new Set(names);
   for (const product of products) {
@@ -332,17 +384,19 @@ export async function seedDemoCatalog(
 
   validateDemoCatalog();
 
-  // Categories: reuse one that already exists with the same name (case-insensitive),
-  // so the unique index on lower(name) can never make the seed fail.
+  // Categories: reuse one that already exists with the same fixed id or the same
+  // name (case-insensitive), so neither the primary key nor the unique index on
+  // lower(name) can ever make the seed fail.
   const categoryRepository = manager.getRepository(Category);
   const idsByName = new Map<string, string>();
   const reusedCategories: string[] = [];
   let createdCategories = 0;
   for (const demo of DEMO_CATEGORIES) {
-    const dto = plainToInstance(CreateCategoryDto, demo);
+    const dto = plainToInstance(CreateCategoryDto, categoryFields(demo));
     const existing = await categoryRepository
       .createQueryBuilder('category')
-      .where('lower(category.name) = lower(:name)', { name: dto.name })
+      .where('category.id = :id', { id: demo.id })
+      .orWhere('lower(category.name) = lower(:name)', { name: dto.name })
       .getOne();
     if (existing) {
       reusedCategories.push(existing.name);
@@ -351,6 +405,7 @@ export async function seedDemoCatalog(
     }
     const created = await categoryRepository.save(
       categoryRepository.create({
+        id: demo.id,
         name: dto.name,
         description: dto.description ?? null,
       }),
@@ -366,6 +421,7 @@ export async function seedDemoCatalog(
     const dto = plainToInstance(CreateProductDto, productFields(demo));
     const product = await productRepository.save(
       productRepository.create({
+        id: demo.id,
         sku: dto.sku,
         name: dto.name,
         description: dto.description ?? null,
