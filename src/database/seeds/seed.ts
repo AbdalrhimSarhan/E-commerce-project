@@ -10,11 +10,13 @@ import { ApiKey } from '../../modules/auth/entities/api-key.entity';
 import { User } from '../../modules/users/entities/user.entity';
 import { UserRole } from '../../modules/users/enums/user-role.enum';
 import { buildTypeOrmOptions } from '../typeorm.config';
+import { type DemoCatalogOutcome, seedDemoCatalog } from './demo-catalog';
 import { validateSeedEnv } from './seed.env';
 
 /**
  * Idempotent demo data: one super_admin, admin, user and agent, plus an API key
- * for the agent. Running it again creates nothing new.
+ * for the agent, and (with SEED_ON_STARTUP=true, only while the products table
+ * is empty) a demo catalog. Running it again creates nothing new.
  *
  * Existing accounts are never modified (passwords are not reset). If the data
  * contradicts the configuration (an email with another role, a second
@@ -182,6 +184,24 @@ function printNewKeyOnce(key: string): void {
   );
 }
 
+function logCatalogOutcome(outcome: DemoCatalogOutcome): void {
+  if (outcome.status === 'created') {
+    const reused =
+      outcome.reusedCategories.length > 0
+        ? `, reused existing categories: ${outcome.reusedCategories.join(', ')}`
+        : '';
+    log(
+      `created  demo catalog: ${outcome.products} products, ${outcome.categories} categories, ${outcome.links} links${reused}`,
+    );
+    return;
+  }
+  log(
+    outcome.reason === 'disabled'
+      ? 'skipped  demo catalog (SEED_ON_STARTUP is not true)'
+      : 'skipped  demo catalog (products already exist; nothing was changed)',
+  );
+}
+
 async function seed(): Promise<void> {
   const env = validateEnv(process.env);
   const seedEnv = validateSeedEnv(process.env);
@@ -224,11 +244,16 @@ async function seed(): Promise<void> {
         }
       }
 
-      return ensureAgentApiKey(
+      const key = await ensureAgentApiKey(
         manager,
         agent as User,
         seedEnv.SEED_AGENT_API_KEY,
       );
+
+      logCatalogOutcome(
+        await seedDemoCatalog(manager, seedEnv.SEED_ON_STARTUP),
+      );
+      return key;
     });
 
     if (newKey !== undefined) {

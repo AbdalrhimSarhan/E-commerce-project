@@ -66,5 +66,52 @@ services:
       db:
         condition: service_healthy
 
+  # MCP server for AI agents: a pure HTTP client of the API (no DB access, no secret).
+  # The MCP client sends the agent API key on every request; it is passed through.
+  mcp:
+    build:
+      context: ./mcp-server
+      target: runtime
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://api:3000/api
+      MCP_PORT: 3001
+      API_TIMEOUT_MS: ${API_TIMEOUT_MS:-10000}
+    ports:
+      - '${MCP_PORT:-3001}:3001'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3001/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # MCP e2e against the running stack: `docker compose --profile test run --rm mcp-e2e`
+  mcp-e2e:
+    profiles: ['test']
+    build:
+      context: ./mcp-server
+      target: test
+    environment:
+      MCP_URL: http://mcp:3001/mcp
+      API_URL: http://api:3000/api
+      AGENT_API_KEY: ${SEED_AGENT_API_KEY}
+      ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      SUPER_ADMIN_EMAIL: ${SEED_SUPER_ADMIN_EMAIL}
+      SUPER_ADMIN_PASSWORD: ${SEED_SUPER_ADMIN_PASSWORD}
+    depends_on:
+      mcp:
+        condition: service_healthy
+
 volumes:
   pgdata:

@@ -1,5 +1,11 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsOptional, IsString, Matches } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsOptional,
+  IsString,
+  Matches,
+} from 'class-validator';
 import { API_KEY_PATTERN } from '../../common/crypto/api-key';
 import { validateConfig } from '../../config/env.validation';
 import {
@@ -64,6 +70,17 @@ export class SeedEnvironmentVariables {
       'SEED_AGENT_API_KEY must match pmk_<8 lowercase hex>_<43 base64url chars>',
   })
   SEED_AGENT_API_KEY?: string;
+
+  /**
+   * Also enables the demo catalog (20 products, 8 categories), which is only
+   * created while the products table is empty. Same strict rule as the
+   * container entrypoint: "true" or "false" only.
+   */
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean({ message: 'SEED_ON_STARTUP must be true or false' })
+  SEED_ON_STARTUP: boolean = false;
 }
 
 export function validateSeedEnv(

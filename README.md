@@ -1,15 +1,15 @@
 # Product Management API
 
 REST API for products and categories (many-to-many) with authentication,
-role-based authorization, an append-only audit log, and API-key access for AI
-agents. An MCP server that exposes the API to AI agents is the next step
-(see [MCP integration](#mcp-integration)).
+role-based authorization, an append-only audit log, and an **MCP server** that
+lets AI agents use the system through the same API (see [MCP server](#mcp-server)).
 
 Built with NestJS 12, TypeScript (strict), PostgreSQL 16, TypeORM 0.3 and Docker.
 
 - **Docs:** Swagger UI at http://localhost:3000/api/docs (OpenAPI JSON: `/api/docs-json`)
 - **Database design and ERD:** [docs/database.md](docs/database.md)
 - **Design decisions:** [docs/design-decisions.md](docs/design-decisions.md)
+- **MCP tools (schemas, examples, errors):** [docs/mcp-tools.md](docs/mcp-tools.md)
 - **AI-assisted development report:** [docs/ai-development-report.md](docs/ai-development-report.md)
 - **Phase reports:** [docs/reports/](docs/reports/)
 
@@ -24,8 +24,14 @@ curl http://localhost:3000/api/health
 ```
 
 On start the `api` container waits for a healthy Postgres, runs pending
-migrations, seeds demo accounts (`SEED_ON_STARTUP=true`), then starts.
-`docker compose ps` shows both services as `healthy`.
+migrations, seeds demo accounts and a demo catalog (`SEED_ON_STARTUP=true`), then starts. The `mcp`
+container starts once the API is healthy. `docker compose ps` shows `db`, `api`
+and `mcp` as `healthy`.
+
+| Service | URL |
+| --- | --- |
+| REST API + Swagger | http://localhost:3000/api · http://localhost:3000/api/docs |
+| MCP server | http://localhost:3001/mcp (health: http://localhost:3001/health) |
 
 Postgres is published on host port **5433** (5432 is often taken by a local
 Postgres / pgAdmin). Connect pgAdmin or psql to `localhost:5433`.
@@ -139,10 +145,12 @@ npm run start:dev
 
 | Command | What |
 | --- | --- |
-| `npm test` | unit tests (87) |
-| `npm run test:e2e` | e2e tests (206) over HTTP against a real database. Needs the db: `docker compose up -d db` |
+| `npm test` | unit tests (97) |
+| `npm run test:e2e` | e2e tests (213) over HTTP against a real database. Needs the db: `docker compose up -d db` |
 | `docker compose --profile test run --rm e2e` | the e2e suite **inside Docker** (no Node needed on the host) |
 | `docker compose --profile test run --rm e2e npm test` | the unit tests inside Docker |
+| `cd mcp-server && npm test` | MCP server unit tests (46): error mapping, timeouts, key extraction, no key in logs |
+| `docker compose --profile test run --rm mcp-e2e` | MCP e2e (14) with the real MCP client against the **running** stack (MCP → API → DB, nothing mocked) |
 
 The e2e suite uses its **own database** (`product_management_test`, from
 [.env.test](.env.test)), created automatically. Migrations run before the
@@ -181,7 +189,7 @@ Seed only (never read by the app):
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `SEED_ON_STARTUP` | no (`false`) | `true`: the container seeds after migrations on every start (idempotent). Other values stop the container |
+| `SEED_ON_STARTUP` | no (`false`) | `true`: the container seeds after migrations on every start (idempotent), including the demo catalog while the products table is empty. Other values stop the container |
 | `SEED_SUPER_ADMIN_EMAIL` / `_PASSWORD` | yes | The single super_admin |
 | `SEED_ADMIN_EMAIL` / `_PASSWORD`, `SEED_USER_EMAIL` / `_PASSWORD` | yes | Demo admin and user |
 | `SEED_AGENT_EMAIL` | yes | Demo AI agent (no password) |
@@ -209,6 +217,33 @@ npm run migration:show
 in one transaction. It is idempotent: existing accounts are left unchanged, and
 contradictions (an email with another role, a second super_admin, a revoked
 fixed key) make it fail without changing anything.
+
+### Demo data
+
+With `SEED_ON_STARTUP=true` (the default in `.env.example`) the seed also loads
+a **demo catalog** of an electronics / home / office store, so the API and the
+MCP tools have data to work with right away:
+
+- **20 products** with SKUs, descriptions, prices and stock (one inactive,
+  out-of-stock product), and **8 categories**.
+- The many-to-many relationship is visible: several products are in 2 or 3
+  categories (e.g. `MON-16-PORT` is in *Monitors & Displays*, *Home Office* and
+  *Laptops & Computers*), **Clearance** has no products, and 3 products have no
+  category (`NET-SW-8P`, `ACC-HUB-7IN1`, `ACC-STAND-AL`).
+- It is created **only while the products table is empty**: once any product
+  exists (seeded or created by you), the seed logs
+  `skipped demo catalog (products already exist; nothing was changed)` and never
+  touches the catalog again.
+- It is validated with the API's own DTO rules (lengths, price format, SKU
+  format) plus unique SKUs and case-insensitive unique category names, and it
+  runs inside the seed's single transaction. A category that already exists
+  with the same name is reused, not duplicated.
+- Seeded data writes **no audit rows**: it is initial data, not an action by a
+  user or an agent.
+
+The data lives in [`src/database/seeds/demo-catalog.ts`](src/database/seeds/demo-catalog.ts).
+To load it again from scratch: `docker compose down -v && docker compose up -d --build`
+(this deletes the database volume).
 
 ## API conventions
 
@@ -244,16 +279,42 @@ fixed key) make it fail without changing anything.
   generated. It comes back in the header, in `meta.requestId`, in every log
   line (`[rid:…]`), and in every audit row.
 
-## MCP integration
+## MCP server
 
-The MCP server is the next phase. The API is ready for it:
+[`mcp-server/`](mcp-server) exposes the system to AI agents as **10 MCP tools**
+(TypeScript SDK v2, Streamable HTTP, stateless). It serves the 2026-07-28 MCP
+revision and the 2025 revision on the same URL.
 
-- The seeded `agent` account authenticates with `X-API-Key`. The MCP container
-  will read the same `SEED_AGENT_API_KEY`.
-- Agent permissions are enforced by the API itself (read everything; write
-  categories and their product links), so the MCP server cannot bypass
-  validation, authorization or the audit log: it only calls the REST API.
-- Every agent write is audited with `actor_type = agent` and `auth_method = api_key`.
+- **A pure API client:** it never touches the database and imports nothing from
+  `src/`. Every tool is an HTTP call to the REST API, so authentication, roles,
+  validation, business rules and the audit log all apply, and nothing can be bypassed.
+- **No secret in the MCP server:** the client sends the agent API key
+  (`X-API-Key` or `Authorization: Bearer`), and it is passed through to the
+  API. No key → HTTP 401. The key is never logged.
+- **Tools:** `list_products`, `get_product`, `list_categories`, `get_category`
+  (read); `create_category`, `update_category`, `delete_category`,
+  `add_products_to_category`, `replace_category_products`,
+  `remove_product_from_category` (write). There are no product write tools,
+  because the agent role may not change products (least privilege).
+- Failed calls return `isError` with the API's `{ code, message, details, requestId }`.
+  The `requestId` is also in the audit row of the change.
+
+It starts with `docker compose up -d --build` (service `mcp`, port 3001).
+
+**VS Code:** the committed [.vscode/mcp.json](.vscode/mcp.json) connects to
+`http://localhost:3001/mcp` with the dev agent key. Command Palette → *MCP: List
+Servers* → `product-management` → *Start*, then use the tools in Copilot agent mode.
+
+**MCP Inspector:**
+```bash
+npx @modelcontextprotocol/inspector
+```
+Transport **Streamable HTTP**, URL `http://localhost:3001/mcp`, header
+`X-API-Key: pmk_00000000_DEV-ONLY_local-agent-key_CHANGE-ME-outside0` → *Connect*
+→ *Tools*.
+
+Full tool reference (input schemas, examples, permissions, error codes):
+[docs/mcp-tools.md](docs/mcp-tools.md).
 
 ## Project structure
 
@@ -274,4 +335,10 @@ src/
     authz-demo/            development-only role matrix demo
 test/                      e2e suites + helpers (real DB over HTTP)
 docker/entrypoint.sh       migrations, optional seed, then app start
+mcp-server/                MCP server (own package, Dockerfile and tests)
+  src/api-client.ts        the only way it talks to the system: HTTP to the API
+  src/tools/               read tools, category write tools, result/error shaping
+  src/http-app.ts          /mcp (key gate + createMcpHandler) and /health
+  test/unit, test/e2e      node:test suites
+http-requests/             REST Client files for manual API testing
 ```

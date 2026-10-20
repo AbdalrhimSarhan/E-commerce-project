@@ -1,0 +1,17 @@
+{
+  // Connects VS Code (Copilot agent mode / MCP) to the local MCP server started by
+  // `docker compose up -d --build`. Open the Command Palette -> "MCP: List Servers"
+  // -> product-management -> Start.
+  //
+  // DEV ONLY: this is the public development key from .env.example
+  // (SEED_AGENT_API_KEY). Never use it outside local development.
+  "servers": {
+    "product-management": {
+      "type": "http",
+      "url": "http://localhost:3001/mcp",
+      "headers": {
+        "X-API-Key": "pmk_00000000_DEV-ONLY_local-agent-key_CHANGE-ME-outside0"
+      }
+    }
+  }
+}

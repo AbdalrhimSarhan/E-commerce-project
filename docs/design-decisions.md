@@ -84,6 +84,9 @@ provider** (correct for production SSO, far too much for this scope).
 - Trade-off: anonymous 401s are not audited (they never reach the roles guard);
   they would mostly be noise. Failed logins are handled by rate limiting, not the
   audit log.
+- **Seeded data is not audited.** The seed loads initial data (accounts and the
+  demo catalog); it is not an action by a user or an agent, so it writes no audit
+  rows, and the audit log only ever describes what real actors did.
 
 ## 5. API design
 
@@ -116,10 +119,80 @@ provider** (correct for production SSO, far too much for this scope).
 - The rate-limit store is in memory: correct for one instance. Several
   instances would need a shared store (Redis); that is a known limitation.
 
-## 7. Known limitations / next steps
+## 7. MCP server
 
-- MCP server (next phase): it will call this REST API with the agent API key, so
-  validation, authorization and auditing apply unchanged.
+Tool reference: [mcp-tools.md](mcp-tools.md).
+
+### 7.1 The MCP server is an API client, not a second backend
+The MCP server never connects to the database and imports no code from `src/`
+(it is a separate package in `mcp-server/`). Every tool is one HTTP call to the
+REST API. So:
+- authentication, role checks, validation, business rules, transactions and
+  the audit log are enforced **in one place** (the API), for humans and agents alike;
+- the MCP server **cannot bypass** them: there is no code path around the API;
+- the two can be deployed and scaled separately, and the API stays the single source of truth.
+
+Trade-off: one extra network hop per tool call (a few ms locally), and the API's
+error envelope must be mapped. Both are cheap compared with duplicating the
+business rules.
+
+### 7.2 SDK v2 and the 2026-07-28 revision
+The server uses the TypeScript SDK **v2** (`@modelcontextprotocol/server`,
+`@modelcontextprotocol/node`), the current stable line, released with the
+2026-07-28 spec. `createMcpHandler` serves **2026-07-28** (stateless, per-request
+`_meta` envelope) and, through its default `legacy: 'stateless'` fallback,
+**2025** clients (`initialize` handshake) on the same URL. Current clients (VS
+Code, MCP Inspector) and new ones both work; the e2e tests connect in both eras.
+v1 (`@modelcontextprotocol/sdk`) was not used.
+
+### 7.3 Streamable HTTP, stateless
+Streamable HTTP is the standard remote transport (stdio would only work for a
+local child process, not for a Docker service). The server is **stateless**:
+every request gets a fresh server instance from the factory, bound to that
+request's key. There are no sessions to store, expire or share between replicas,
+so the MCP server can scale horizontally behind a load balancer.
+
+### 7.4 Key passthrough (no secret in the MCP server)
+The MCP client sends the agent's API key on every request (`X-API-Key`, or
+`Authorization: Bearer` for clients that only support that). The MCP server
+hands it to the per-request API client, which forwards it as `X-API-Key`. The
+**API** decides who the caller is and what it may do.
+- The MCP server stores no credential: a compromised MCP container leaks
+  nothing at rest, and there is one place to revoke access (the API).
+- Each request is isolated: a tool can only ever use the key of the request
+  that called it (closure over a per-request client, no global state).
+- The key is never logged; a redaction filter is a second safeguard (tested).
+- No key → HTTP 401 before MCP handling; a bad, revoked or expired key, or a
+  deactivated agent → the API's 401, returned as tool error `UNAUTHORIZED`.
+
+**Why an API key and not a JWT for agents?** An API key is long-lived, which is
+its risk. But it is stored only as a sha256 hash, can be revoked or expired at
+any time, works only for the `agent` role (least privilege: no product writes,
+no user management, no audit access), and stops working immediately when the
+agent is deactivated. A JWT would need an interactive login plus a refresh flow
+that an MCP client cannot run. A full OAuth 2.1 setup (which the MCP spec
+supports) is the production upgrade path, but it is far beyond this scope.
+
+### 7.5 No product write tools
+The agent role may not create, update or delete products (API rule). Exposing
+such tools would only produce `FORBIDDEN` errors, mislead the model about what
+it can do, and waste context, so they are not registered at all (least
+privilege; tested in e2e: `tools/list` returns exactly 10 tools).
+
+### 7.6 Error mapping
+Every API error envelope becomes a tool result with `isError: true` and
+`structuredContent.error = { code, message, details?, requestId }`, using the
+**API's own code** (`VALIDATION_ERROR`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`,
+...). The agent can read *why* a call failed and react (e.g. pick another name
+after `CONFLICT`). Network failures and timeouts become `UPSTREAM_UNAVAILABLE`
+without stack traces or internal addresses. Successful results carry a short
+text summary plus the JSON as `structuredContent`. The `requestId` of each tool
+call is sent as `X-Request-Id`, so one id links the MCP log line, the API log
+and the audit row.
+
+## 8. Known limitations / next steps
+
 - No API key management endpoints yet (keys come from the seed).
+- MCP: no OAuth 2.1 authorization server (key passthrough instead, see 7.4).
 - `authz-demo` routes exist only in development and are scheduled for removal.
 - Password policy counts characters; bcrypt's real limit is 72 **bytes**.
